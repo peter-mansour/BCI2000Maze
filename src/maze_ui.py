@@ -27,7 +27,7 @@ class OutOfBounds(BaseException):
 
 class GameCtrl:
 	_players = []
-	__ONE_SEC = dt.timedelta(seconds=1)
+	__TICK = dt.timedelta(seconds=1)/16
 	__sec_till_start = 10
 	__MSG_START = "Go...Go...Go..."
 	__MSG_WILL_START = "Game will start in:"
@@ -36,15 +36,20 @@ class GameCtrl:
 	__TEST_COUNT = 8
 	MAX_PLAYERS = 5
 	__ERR_FLAG = -9999
+	__dependencies = []
 	travel_t = 0.05
 	moves = {'f':0, 'b':180, 'l':90, 'r':-90, 'l63':63, 'r63':-63}
 	P = None
 	__sckt_tcp = None
 	__start = False
 	
-	def init(sckt_tcp, clr, fpv, keyboard, assist, mvbuff):
+	def init(sckt_tcp, clr, fpv, keyboard, assist, mvbuff, file, speech, bci):
 		GameCtrl.__sckt_tcp = sckt_tcp 
 		GameCtrl.__my_clr = clr
+		if file:
+			GameCtrl.__dependencies.append(file.status)
+		if sckt_tcp:
+			GameCtrl.__dependencies.append(sckt_tcp.status)
 		sock = sckt.socket(sckt.AF_INET, sckt.SOCK_DGRAM)
 		sock.connect(('8.8.8.8', 80))
 		GameCtrl.__my_ip = sock.getsockname()[0]
@@ -52,6 +57,8 @@ class GameCtrl:
 		GameCtrl.__fpv = fpv
 		GameCtrl.__assist = assist
 		GameCtrl.__mvbuff = mvbuff
+		GameCtrl.__speech = speech
+		GameCtrl.__bci = bci
 	
 	def start():
 		try:
@@ -68,11 +75,14 @@ class GameCtrl:
 		Console.enable_quick_edit()
 	
 	def update_pos():
-		#GameCtrl.__file.status
 		last_mv = 0
 		Shell.init()
-		start = True
-		while start:
+		warning = False
+		t_curr = dt_dt.now()
+		t_last = dt_dt.now()
+		while True:
+			if Shell.is_quit() and GameCtrl.__status(*GameCtrl.__dependencies):
+				break
 			if c := GameCtrl.__sckt_tcp.get():
 				if c.request == '_x_maze_outline_x_':	
 					Shell.set_maze(ImageProcessing.base642img(zlib.decompress(c.data)))
@@ -84,20 +94,29 @@ class GameCtrl:
 					if P := GameCtrl.get_player(c.id_trgt['ip'], c.id_trgt['clr']):
 						P.crawl(c.misc.curx, c.misc.cury)
 				if c.warn:
+					warning = True
 					print(c.warn, flush=True)
+				else:
+					warning = False
 				Shell.update_ui(GameCtrl._players)
-			if not GameCtrl.__mvbuff.empty():
-				mv = GameCtrl.moves[GameCtrl.__mvbuff.get(block=True)]
-				next_mv = 0 if GameCtrl.__fpv and last_mv == mv else mv
-			elif GameCtrl.__assist:	
-				next_mv = 0 if GameCtrl.__fpv else last_mv
-			else:
-				next_mv = None
-			if next_mv != None:
-				GameCtrl.__sckt_tcp.send(Pkt('_x_gameplay_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-					{'ip':'0.0.0.0', 'clr':None}, {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, next_mv, 0, None, None, None))
-			if Shell.is_quit() and GameCtrl.__status(GameCtrl.__sckt_tcp.status):
-				start = False
+			t_curr = dt_dt.now()
+			if t_curr - t_last > GameCtrl.__TICK:
+				t_last = dt_dt.now()
+				if (GameCtrl.__speech or GameCtrl.__bci) and not GameCtrl.__mvbuff.empty():
+					try:
+						last_mv = next_mv = GameCtrl.moves[GameCtrl.__mvbuff.get(block=True)]
+					except KeyError:
+						pass
+				elif GameCtrl.__key:
+					key = Shell.key_pressed()
+					last_mv = next_mv = GameCtrl.moves[key] if key else None
+				elif GameCtrl.__assist and not warning:			
+					next_mv = 0
+				else:
+					next_mv = None
+				if next_mv != None:
+					GameCtrl.__sckt_tcp.send(Pkt('_x_gameplay_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
+						{'ip':'0.0.0.0', 'clr':None}, {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, (next_mv, GameCtrl.__fpv), 0, None, None, None))
 
 	def add2players(new_p):
 		GameCtrl._players.append(new_p)
@@ -169,4 +188,15 @@ class Shell:
 	
 	def exit():
 		pygame.quit()
-	
+		
+	def key_pressed():
+		keys=pygame.key.get_pressed()
+		if keys[pygame.K_LEFT]:
+			return 'l'
+		elif keys[pygame.K_RIGHT]:
+			return 'r'
+		elif keys[pygame.K_UP]:
+			return 'f'
+		elif keys[pygame.K_DOWN]:
+			return 'b'
+		return None

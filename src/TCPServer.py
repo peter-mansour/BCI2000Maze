@@ -4,7 +4,6 @@ import threading
 import queue
 import pickle
 from connect_utils import *
-from win_cmd import Console
 from GameLogic import *
 import os
 import zlib
@@ -17,7 +16,7 @@ class TCPServer:
 	__MSG_REQ = "%s requested to be a %s"
 	__MSG_WELCOME = "Server is Up and Running..."
 	__HOW2CLOSE = "Ctrl + C to close Server"
-	__MSG_FORWARD = "forwarding pkt to %s (%s) from %s (%s)"
+	__MSG_FORWARD = "forwarding pkt to %s (%s)"
 	__MSG_LEFT = "%s left the network"
 	__MSG_REJECT_JOIN = "Rejected %s request to join (already on network)"
 	__clients = []
@@ -35,11 +34,12 @@ class TCPServer:
 	__manager_t = None
 	
 	@staticmethod
-	def init(IP, PORT, count):
+	def init(IP, PORT, count, inos):
 		TCPServer.__IP = IP
 		TCPServer.__PORT = PORT
 		TCPServer.__player_count = count
 		TCPServer.__sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		TCPServer.__inos = inos
 		TCPServer.__run_host_t = threading.Thread(target=TCPServer.__run_host, args=(), daemon=True)
 		TCPServer.__manager_t = threading.Thread(target=TCPServer.__manage_threads, args=(), daemon=True)
 		TCPServer.__process_pkt_t = threading.Thread(target=TCPServer.__process_pkt, args=(), daemon=True)
@@ -53,7 +53,6 @@ class TCPServer:
 	
 	@staticmethod
 	def __run_host():
-		Console.disable_quick_edit()
 		print(TCPServer.__MSG_WELCOME, flush=True)
 		print(TCPServer.__HOW2CLOSE)
 		TCPServer.__manager_t.start()
@@ -63,7 +62,6 @@ class TCPServer:
 			while True:
 				sock, (ip, ext) = TCPServer.__sock.accept()
 				client = ClientInfo(sock, ip, ext)
-				Console.disable_quick_edit()
 				if not TCPServer.on_network(client):
 					TCPServer.__clients.append(client)
 					print(TCPServer.__MSG_JOIN % client.ip, flush=True)
@@ -126,7 +124,6 @@ class TCPServer:
 			if pkt_info[1] == 'json' and pkt_info[0]['request'] == '_x_watch_x_':
 				pkt_info[2].role = 'Listener'
 				TCPServer.__listeners.append(pkt_info[2])
-				Console.disable_quick_edit()
 				print(TCPServer.__MSG_REQ % (pkt_info[2].ip, 'Listener'), flush=True)
 			elif pkt_info[1] == 'pickle':
 				client = TCPServer.get_client(pkt_info[0].id_from['ip'], TCPServer.__clients)
@@ -134,19 +131,20 @@ class TCPServer:
 					client.role = 'Player'
 					client.clr = pkt_info[0].id_from['clr']
 					client.misc = pos(GameLogic._start_pos[0], GameLogic._start_pos[1], 0, 0, 90, None)
+					for ino in TCPServer.__inos:
+						client.ino = (ino[0], ino[1]) if ino[2] else None
 					TCPServer.__players.append(client)
 					TCPServer.dm(client, Pkt('_x_maze_outline_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
 						{'ip':'0.0.0.0', 'clr':None}, zlib.compress(ImageProcessing.img2base64(GameLogic._maze_img_obj)), None, os.urandom(32), None, None))
 					rsp = Pkt('_x_new_player_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
 						{'ip':client.ip, 'clr':client.clr}, None, None, os.urandom(32), client.misc, None)
 					TCPServer.broadcast(TCPServer.__players, rsp)
-					Console.disable_quick_edit()
 					print(TCPServer.__MSG_REQ % (client.ip, 'Player'), flush=True)
 				elif pkt_info[0].request == '_x_gameplay_x_' and client.role == 'Player' and TCPServer.__game_on:
 					new_pos = client.misc
 					warn = None
 					try:
-						new_pos, dir = GameLogic.update_pos(client.misc, int(pkt_info[0].data))
+						new_pos, dir = GameLogic.update_pos(client.misc, pkt_info[0].data)
 					except OutOfBounds as e:
 						warn = "%s (%d, %d)" % (e.msg, e.x, e.y)
 					rsp_pick = Pkt('_x_gameplay_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
@@ -154,9 +152,16 @@ class TCPServer:
 					rsp_json = PktCompact('_x_gameplay_x_', client.ip, client.clr, dir, new_pos.deg)
 					TCPServer.broadcast(TCPServer.__listeners, rsp_json, serial_method='json')
 					TCPServer.broadcast(TCPServer.__players, rsp_pick)
+					if client.ino:
+						client.ino[1].put(dir, block=True)
 				elif pkt_info[0].request == '_x_ready_x_' and client.role == 'Player':
-					TCPServer.__ready_pkgs.put(pkt_info[0])
-					TCPServer.__trig_ready.set()			
+					if TCPServer.__game_on:
+						rsp = Pkt('_x_start_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None},
+							None, None, None, os.urandom(32), None, None)
+						TCPServer.dm(client, rsp)
+					else:
+						TCPServer.__ready_pkgs.put(pkt_info[0])
+						TCPServer.__trig_ready.set()			
 			if TCPServer.__pkt_buffer.empty():
 				TCPServer.__trig_process.clear()
 		TCPServer.__destroy_threads.put(th_id, block=True)
@@ -195,8 +200,7 @@ class TCPServer:
 				c.sock.send(json.dumps(pkt, cls=PktJsonEncoder).encode('ascii'))
 			elif serial_method == 'pickle':
 				c.sock.send(pickle.dumps(pkt))
-			#Console.disable_quick_edit()
-			#print(self.__MSG_FORWARD % (c.ip, c.role, sender.ip, sender.role) , flush=True)
+			#print(TCPServer.__MSG_FORWARD % (c.ip, c.role) , flush=True)
 	
 	@staticmethod
 	def dm(user, pkt, serial_method='pickle'):
@@ -204,6 +208,7 @@ class TCPServer:
 			user.sock.send(json.dumps(pkt, cls=PktJsonEncoder).encode('ascii'))
 		elif serial_method == 'pickle':
 			user.sock.send(pickle.dumps(pkt))
+		#print(TCPServer.__MSG_FORWARD % (user.ip, user.role) , flush=True)
 	
 	@staticmethod
 	def on_network(client):

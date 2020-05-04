@@ -2,7 +2,7 @@
 from json import JSONEncoder
 
 class ClientInfo:
-	def __init__(self, sock, ip, ext, clr=None, role=None, pkts=None, misc=None):
+	def __init__(self, sock, ip, ext, clr=None, role=None, pkts=None, misc=None, ino=None):
 		self.sock = sock
 		self.ip = ip
 		self.ext = ext
@@ -10,6 +10,7 @@ class ClientInfo:
 		self.pkts = pkts
 		self.misc = misc
 		self.clr = clr
+		self.ino = ino
 
 class Pkt:
 	def __init__(self, subject, id_from={'ip':'0.0.0.0', 'clr':None}, id_to={'ip':'0.0.0.0', 'clr':None}, 

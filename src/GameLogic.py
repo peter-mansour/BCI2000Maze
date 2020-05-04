@@ -24,6 +24,7 @@ class GameLogic:
 	__ERR_WALL = "About to hit a wall"
 	__ERR_MAP = "Attempting to add element outside window"
 	_maze_img_obj = None
+	moves = {0:'f', 180:'b', 90:'l', -90:'r', 63:'l63', -63:'r63'}
 	
 	@staticmethod
 	def init(maze, inverted_color):
@@ -49,29 +50,16 @@ class GameLogic:
 			raise OutOfBounds(GameLogic.__ERR_MAP, c, r)
 	
 	@staticmethod
-	def update_pos(pos, deg):
-		new_deg = (deg+pos.deg)%360
+	def update_pos(pos, move):
+		new_deg = (move[0]+pos.deg)%360 if move[1] else 90+move[0]
 		lr, ud = GameLogic.deg2xy(new_deg)
 		dir = None
 		if not GameLogic.near_wall((pos.cury, pos.curx), (pos.cury+round(ud), pos.curx+round(lr))):
-			pos.new_deg = new_deg
+			pos.deg = new_deg
 			pos.prevx = pos.curx
 			pos.prevy = pos.cury
 			pos.cury += round(ud)
 			pos.curx += round(lr)
-			if ud > 0:
-				dir = 'f'
-			elif ud < 0:
-				dir = 'b'
-			if lr > 0:
-				dir = 'r'
-			elif lr < 0:
-				dir = 'l'
 		else:
 			raise OutOfBounds(GameLogic.__ERR_WALL, pos.curx+round(lr), pos.cury+round(ud))
-		return pos, dir
-	
-	@staticmethod
-	def __map_loc(x, y):
-		return (math.floor(Shell.__SPRITE_SZ * x + Shell.__PX_LOW_LIMIT), 
-			math.floor(-1*Shell.__SPRITE_SZ * y + Shell.__PX_HIGH_LIMIT))
+		return pos, GameLogic.moves[move[0]]

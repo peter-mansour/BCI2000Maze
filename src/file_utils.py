@@ -3,7 +3,6 @@ import time
 from datetime import datetime as dt_dt
 import datetime as dt
 import queue
-from connect_utils import Pkt
 import threading
 
 class FParse:
@@ -15,16 +14,14 @@ class FParse:
 	__MSG_CLOSE_F = "Closing BCI2000 app log: "
 	__ERR_FLAG = -9999
 	
-	def __init__(self, __ip, __clr, sckt_tcp):
+	def __init__(self, buff):
 		self.__regex = re.compile(self.__REG)
-		self.__ip = __ip
-		self.__clr = __clr
-		self.__sckt_tcp = sckt_tcp
+		self.__buff = buff
 		self.status = queue.Queue()
 		self.__destroy = 0
 
 	def __put_on_stream(self, e):
-		self.__sckt_tcp.send(Pkt(e, self.__ip, self.__clr))
+		self.__buff.put(e.lower())
 	
 	def shutdown(self):
 		self.__destroy = 1
@@ -48,7 +45,7 @@ class FParse:
 						for m in matches:
 							self.__str_glbl += m
 						if len(self.__str_glbl) > 0:
-							self.__put_on_stream('_x_'+self.__str_glbl[len(self.__str_glbl)-1]+'_x_')
+							self.__put_on_stream(self.__str_glbl[len(self.__str_glbl)-1].lower())
 						t_last_match = dt_dt.now()
 					file.close()
 			print(self.__MSG_TIMEOUT, flush=True)

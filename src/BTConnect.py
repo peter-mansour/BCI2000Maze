@@ -1,76 +1,85 @@
 
 import bluetooth as BT
 import subprocess
-from win_cmd import Console
 
 class BTConnect:
-	TRIAL_COUNT     = 3
-	SEARCH_FOR      = 5
-	MSG_SEARCHING   = "Looking for nearby BT devices..."
-	MSG_BTS         = "Nearby BT devices:"
-	MSG_NO_BTS      = "No BT devices found"
-	MSG_BT_NOTFOUND = "Could not locate target BT device"
-	DIVIDER         = "+-----------------+---------------------+"
-	format_lng      = "| %s | %s\t|"
-	format_shrt     = "| %s\t  | %s\t|"
-	COL_WIDTH       = 15
-	MSG_BT_FOUND    = "Found target BT device"
-	MSG_FIND_FAILED = "Make sure target BT device is in range and is turned on!"
-	MSG_CONNECT     = "Connected to target BT device..."
+	__MSG_CONNECT     = "Connected to target BT device..."
 	__MSG_DISCONNECT  = "Disconnecting BT device..."
+	__MSG_FIND_FAILED = "Make sure target BT device is in range and is turned on!"
+	__MSG_BT_NOTFOUND = "Could not locate target BT device"
+	__TRIAL_COUNT     = 3
+	__SEARCH_FOR      = 5
+	__MSG_SEARCHING   = "Looking for nearby BT devices..."
+	__MSG_BTS         = "Nearby BT devices:"
+	__MSG_NO_BTS      = "No BT devices found"
+	__MSG_BT_NOTFOUND = "Could not locate target BT device"
+	__DIVIDER         = "+-----------------+---------------------+"
+	__FORMAT_LNG     = "| %s | %s\t|"
+	__FORMAT_SHRT     = "| %s\t  | %s\t|"
+	__COL_WIDTH       = 15
+	__MSG_BT_FOUND    = "Found target BT device"
+	__MSG_FIND_FAILED = "Make sure target BT device is in range and is turned on!"
+	__BUFF_SZ = 9600
 	
 	def __init__(self, trgt_addr, trgt_port):
-		self.port       = trgt_port
-		self.trgt_addr  = trgt_addr
+		self.__port       = trgt_port
+		self.__trgt_addr  = trgt_addr
 		self.__sock       = BT.BluetoothSocket(BT.RFCOMM)
-		
-	def connect(self, addr):
-		if addr != "":
-			self.__sock.connect((addr, self.port))
-			print(self.MSG_CONNECT)
-			
-	def find(self):
+	
+	@staticmethod
+	def find(addr=None, verbose=True):
 		trial = 0
-		addr = ""
+		found = False
 		
-		while addr == "" and trial < self.TRIAL_COUNT:
+		while not found and trial < BTConnect.__TRIAL_COUNT:
 			trial+=1
-			print(self.MSG_SEARCHING)
+			if verbose:
+				print(BTConnect.__MSG_SEARCHING)
 			bt_devices = BT.discover_devices(lookup_names = True, 
-						 duration = self.SEARCH_FOR, flush_cache = True)
-			if len(bt_devices)!=0:
-				print(self.MSG_BTS, flush=True)
-				print(self.DIVIDER, flush=True)
-				print(self.format_shrt %("Device Name", "Device Address"))
-				print(self.DIVIDER)
+						 duration = BTConnect.__SEARCH_FOR, flush_cache = True)
+			if len(bt_devices):
+				if verbose:
+					print(BTConnect.__MSG_BTS, flush=True)
+					print(BTConnect.__DIVIDER, flush=True)
+					print(BTConnect.__FORMAT_SHRT %("Device Name", "Device Address"))
+					print(BTConnect.__DIVIDER)
 				for dev_addr, dev_id in bt_devices:
-					if len(dev_id) < self.COL_WIDTH:
-						str_form = self.format_shrt
-					else:
-						str_form = self.format_lng
-					print(str_form%(dev_id[:self.COL_WIDTH], dev_addr),flush=True)
-					if dev_addr == self.trgt_addr:
-						addr = dev_addr
-					print(self.DIVIDER, flush=True)
-			else:
-				print(self.MSG_NO_BTS, flush=True)
-			if addr == "":
-				print(self.MSG_BT_NOTFOUND, flush=True)
-			else:
-				print(self.MSG_BT_FOUND, flush=True)
-		if addr == "":
-			print(self.MSG_FIND_FAILED, flush=True)
-		
-		return addr
+					if verbose:
+						if len(dev_id) < BTConnect.__COL_WIDTH:
+							str_form = BTConnect.__FORMAT_SHRT
+						else:
+							str_form = BTConnect.__FORMAT_LNG
+						print(str_form%(dev_id[:BTConnect.__COL_WIDTH], dev_addr),flush=True)
+					if dev_addr == addr:
+						found = True
+					if verbose:
+						print(BTConnect.__DIVIDER, flush=True)
+			elif verbose:
+				print(BTConnect.__MSG_NO_BTS, flush=True)
+			if not found and verbose:
+				print(BTConnect.__MSG_BT_NOTFOUND, flush=True)
+				print(BTConnect.__MSG_FIND_FAILED, flush=True)
+			elif verbose:
+				print(BTConnect.__MSG_BT_FOUND, flush=True)
+		return found
+	
+	def connect(self):
+		if BTConnect.find(self.__trgt_addr, True):
+			self.__sock.connect((self.__trgt_addr, self.__port))
+			print(self.__MSG_CONNECT)
+		else:
+			print(self.__MSG_BT_NOTFOUND, flush=True)
+			print(self.__MSG_FIND_FAILED, flush=True)
 	
 	def disconnect(self):
 		print(self.__MSG_DISCONNECT, flush=True)
 		self.__sock.close()
 		
-	def send(self, data):
-		err = "Failed to send msg to"
-		connected_dev = subprocess.getoutput("hcitool con")
-		if self.trgt_addr in connected_dev:
-			self.__sock.send(data)
+	def rcv(self, inbuff, status):
+		if val := self.__sock.recv(self.__BUFF_SZ):
+			inbuff.put(val, block=True)
 		else:
-			raise RuntimeError(err+self.trgt_addr)
+			status.put(0, block=True)
+
+	def send(self, data):
+		self.__sock.send(data)
