@@ -76,10 +76,12 @@ class BTConnect:
 		self.__sock.close()
 		
 	def rcv(self, inbuff, status):
-		if val := self.__sock.recv(self.__BUFF_SZ):
-			inbuff.put(val, block=True)
-		else:
-			status.put(0, block=True)
+		while True:
+			val = self.__sock.recv(self.__BUFF_SZ)
+			if val:
+				inbuff.put(val, block=True)
+			else:
+				status.put(0, block=True)
 
 	def send(self, data):
 		self.__sock.send(data)

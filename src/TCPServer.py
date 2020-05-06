@@ -32,6 +32,7 @@ class TCPServer:
 	__destroy_threads = queue.Queue()
 	__cleanup = threading.Event()
 	__manager_t = None
+	_shutdown = False
 	
 	@staticmethod
 	def init(IP, PORT, count, inos):
@@ -59,7 +60,7 @@ class TCPServer:
 		TCPServer.__process_pkt_t.start()
 		TCPServer.__sock.listen(1)
 		try:
-			while True:
+			while not TCPServer._shutdown:
 				sock, (ip, ext) = TCPServer.__sock.accept()
 				client = ClientInfo(sock, ip, ext)
 				if not TCPServer.on_network(client):
@@ -92,9 +93,11 @@ class TCPServer:
 	@staticmethod
 	def __talk2client(client, thid):
 		try:
-			while True:
-				if pkt := client.sock.recv(TCPServer.BUFFER_SZ):
-					if pkt_str:= TCPServer.__ascii2str(pkt):
+			while not TCPServer._shutdown:
+				pkt = client.sock.recv(TCPServer.BUFFER_SZ)
+				if pkt:
+					pkt_str = TCPServer.__ascii2str(pkt)
+					if pkt_str:
 						pkt_content = TCPServer.__json2dict(pkt_str)
 						TCPServer.__pkt_buffer.put((pkt_content, 'json', client), block=True)
 					else:
@@ -134,7 +137,7 @@ class TCPServer:
 					for ino in TCPServer.__inos:
 						client.ino = (ino[0], ino[1]) if ino[2] else None
 					TCPServer.__players.append(client)
-					TCPServer.dm(client, Pkt('_x_maze_outline_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
+					TCPServer.dm(client, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
 						{'ip':'0.0.0.0', 'clr':None}, zlib.compress(ImageProcessing.img2base64(GameLogic._maze_img_obj)), None, os.urandom(32), None, None))
 					rsp = Pkt('_x_new_player_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
 						{'ip':client.ip, 'clr':client.clr}, None, None, os.urandom(32), client.misc, None)
@@ -144,8 +147,10 @@ class TCPServer:
 					new_pos = client.misc
 					warn = None
 					try:
-						new_pos, dir = GameLogic.update_pos(client.misc, pkt_info[0].data)
+						new_pos, dir, win = GameLogic.update_pos(client.ip, client.misc, pkt_info[0].data)
 					except OutOfBounds as e:
+						win = None
+						dir = None
 						warn = "%s (%d, %d)" % (e.msg, e.x, e.y)
 					rsp_pick = Pkt('_x_gameplay_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
 						{'ip':client.ip, 'clr':client.clr}, None, None, os.urandom(32), new_pos, warn)
@@ -154,6 +159,20 @@ class TCPServer:
 					TCPServer.broadcast(TCPServer.__players, rsp_pick)
 					if client.ino:
 						client.ino[1].put(dir, block=True)
+					if win:
+						TCPServer.dm(client, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
+						{'ip':client.ip, 'clr':client.clr}, zlib.compress(ImageProcessing.img2base64(GameLogic._win_img)), None, os.urandom(32), None, None))
+						for c in TCPServer.__players:
+							if c.ip != client.ip:
+								TCPServer.dm(c, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
+									{'ip':client.ip, 'clr':client.clr}, zlib.compress(ImageProcessing.img2base64(GameLogic._lose_img)), 
+									None, os.urandom(32), None, None))
+						TCPServer._shutdown = True
+						TCPServer.__game_on = False
+						break
+				elif pkt_info[0].request == '_x_keyboard_x_' and client.role == 'Player':
+					print("binding keys %s" %client.ip)
+					GameLogic._bind_keys(client.ip, pkt_info[0].data)
 				elif pkt_info[0].request == '_x_ready_x_' and client.role == 'Player':
 					if TCPServer.__game_on:
 						rsp = Pkt('_x_start_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None},
@@ -161,11 +180,11 @@ class TCPServer:
 						TCPServer.dm(client, rsp)
 					else:
 						TCPServer.__ready_pkgs.put(pkt_info[0])
-						TCPServer.__trig_ready.set()			
+						TCPServer.__trig_ready.set()
 			if TCPServer.__pkt_buffer.empty():
 				TCPServer.__trig_process.clear()
-		TCPServer.__destroy_threads.put(th_id, block=True)
-		TCPServer.__cleanup.set()
+		#TCPServer.__destroy_threads.put(th_id, block=True)
+		#TCPServer.__cleanup.set()
 	
 	@staticmethod
 	def _wait():

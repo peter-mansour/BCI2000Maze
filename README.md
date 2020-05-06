@@ -7,7 +7,7 @@ You need to pip install:
  - click 7.1.1
  - numpy 1.18.2
  - Pillow 7.1.0
- - PyBluez 0.23
+ - PyBluez-win10
 
 To run server:
 	`python3 server.py [OPTIONS] IPV4_HOST [PORT]`

@@ -38,12 +38,12 @@ class GameCtrl:
 	__ERR_FLAG = -9999
 	__dependencies = []
 	travel_t = 0.05
-	moves = {'f':0, 'b':180, 'l':90, 'r':-90, 'l63':63, 'r63':-63}
+	moves = {'f':0, 'b':180, 'l':90, 'r':-90, 'ul':45, 'ur':-45, 'dl':225, 'dr':-135, 'l63':63, 'r63':-63}
 	P = None
 	__sckt_tcp = None
 	__start = False
 	
-	def init(sckt_tcp, clr, fpv, keyboard, assist, mvbuff, file, speech, bci):
+	def init(sckt_tcp, clr, fpv, keyboard, assist, mvbuff, file, speech, bci, mapl, mapr):
 		GameCtrl.__sckt_tcp = sckt_tcp 
 		GameCtrl.__my_clr = clr
 		if file:
@@ -59,14 +59,21 @@ class GameCtrl:
 		GameCtrl.__mvbuff = mvbuff
 		GameCtrl.__speech = speech
 		GameCtrl.__bci = bci
+		if mapl:
+			GameCtrl.moves['l'] = mapl
+		if mapr:
+			GameCtrl.moves['r'] = mapr
 	
 	def start():
 		try:
 			Console.disable_quick_edit()
 			GameCtrl.__sckt_tcp.send(Pkt('_x_play_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-				{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
+				{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))	
 			GameCtrl.__sckt_tcp.send(Pkt('_x_ready_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
 				{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
+			time.sleep(1)
+			GameCtrl.__sckt_tcp.send(Pkt('_x_keyboard_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
+				{'ip':'0.0.0.0', 'clr':None}, None, GameCtrl.moves, 0, None, None, None))
 			GameCtrl.update_pos()
 		except KeyboardInterrupt:
 			print('', flush=True)
@@ -83,15 +90,17 @@ class GameCtrl:
 		while True:
 			if Shell.is_quit() and GameCtrl.__status(*GameCtrl.__dependencies):
 				break
-			if c := GameCtrl.__sckt_tcp.get():
-				if c.request == '_x_maze_outline_x_':	
-					Shell.set_maze(ImageProcessing.base642img(zlib.decompress(c.data)))
+			c = GameCtrl.__sckt_tcp.get()
+			if c:
+				if c.request == '_x_img_x_':	
+					Shell.set_bgnd(ImageProcessing.base642img(zlib.decompress(c.data)))
 				elif c.request == '_x_new_player_x_':
 					GameCtrl.add2players(Player(c.id_trgt['ip'], c.id_trgt['clr'], c.misc.curx, c.misc.cury, c.misc.deg))
 				elif c.request == '_x_start_x_':
 					GameCtrl.__start = True
 				elif c.request == '_x_gameplay_x_' and GameCtrl.__start:
-					if P := GameCtrl.get_player(c.id_trgt['ip'], c.id_trgt['clr']):
+					P = GameCtrl.get_player(c.id_trgt['ip'], c.id_trgt['clr'])
+					if P:
 						P.crawl(c.misc.curx, c.misc.cury)
 				if c.warn:
 					warning = True
@@ -102,22 +111,22 @@ class GameCtrl:
 			t_curr = dt_dt.now()
 			if t_curr - t_last > GameCtrl.__TICK:
 				t_last = dt_dt.now()
+				next_mv = None
 				if (GameCtrl.__speech or GameCtrl.__bci) and not GameCtrl.__mvbuff.empty():
 					try:
-						last_mv = next_mv = GameCtrl.moves[GameCtrl.__mvbuff.get(block=True)]
+						next_mv = GameCtrl.moves[GameCtrl.__mvbuff.get(block=True)]
 					except KeyError:
 						pass
 				elif GameCtrl.__key:
 					key = Shell.key_pressed()
-					last_mv = next_mv = GameCtrl.moves[key] if key else None
-				elif GameCtrl.__assist and not warning:			
+					next_mv = GameCtrl.moves[key] if key else None
+				if GameCtrl.__assist and not warning and next_mv == None:			
 					next_mv = 0
-				else:
-					next_mv = None
 				if next_mv != None:
 					GameCtrl.__sckt_tcp.send(Pkt('_x_gameplay_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
 						{'ip':'0.0.0.0', 'clr':None}, {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, (next_mv, GameCtrl.__fpv), 0, None, None, None))
-
+				last_mv = next_mv
+				
 	def add2players(new_p):
 		GameCtrl._players.append(new_p)
 
@@ -157,7 +166,7 @@ class Shell:
 	__SPRITE_SZ = 1
 	__FIG_MAX_W = math.floor(__WIN_MAX_X/__SPRITE_SZ)
 	__FIG_MAX_H = math.floor(__WIN_MAX_Y/__SPRITE_SZ)
-	__maze = None
+	__bgnd = None
 	__win = None
 	__PLY_SIZE = 5
 
@@ -165,17 +174,17 @@ class Shell:
 		Shell.__win = pygame.display.set_mode((Shell.__WIN_MAX_X, Shell.__WIN_MAX_Y))
 		pygame.display.set_caption('Maze game')
 		
-	def set_maze(maze):
-		Shell.__maze = pygame.image.fromstring(maze.tobytes(), maze.size, maze.mode).convert()
+	def set_bgnd(img):
+		Shell.__bgnd = pygame.image.fromstring(img.tobytes(), img.size, img.mode).convert()
 	
-	def __draw_maze():
-		Shell.__win.blit(Shell.__maze, [0,0])
+	def __draw_bgnd():
+		Shell.__win.blit(Shell.__bgnd, [0,0])
 	
 	def __draw_player(p):
 		pygame.draw.circle(Shell.__win, pygame.Color(p.clr), p.loc, Shell.__PLY_SIZE)
 	
 	def update_ui(players):
-		Shell.__draw_maze()
+		Shell.__draw_bgnd()
 		for p in players:
 			Shell.__draw_player(p)
 		pygame.display.update()
@@ -192,9 +201,19 @@ class Shell:
 	def key_pressed():
 		keys=pygame.key.get_pressed()
 		if keys[pygame.K_LEFT]:
-			return 'l'
+			if keys[pygame.K_UP]:
+				return 'ul'
+			elif keys[pygame.K_DOWN]:
+				return 'dl'
+			else:
+				return 'l'
 		elif keys[pygame.K_RIGHT]:
-			return 'r'
+			if keys[pygame.K_UP]:
+				return 'ur'
+			elif keys[pygame.K_DOWN]:
+				return 'dr'
+			else:
+				return 'r'
 		elif keys[pygame.K_UP]:
 			return 'f'
 		elif keys[pygame.K_DOWN]:

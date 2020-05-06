@@ -7,7 +7,7 @@ import time
 from connect_utils import *
 
 class TCPClient:
-	BUFFER_SZ = 5000
+	BUFFER_SZ = 10000
 	__MSG_NOT_UP = "Server is not running"
 	__MSG_DISCONNECT = "Disconnected from server..."
 	__ERR = -9999
@@ -40,10 +40,12 @@ class TCPClient:
 				sock.send(pickle.dumps(self.__send_buff.get(block=True)))
 				if self.__send_buff.empty():
 					trigger.clear()
-				#time.sleep(0.5)
-		except ConnectionResetError as e:
+		except ConnectionResetError:
 			print(self.__MSG_DISCONNECT, flush=True)
 			self.status.put(self.__ERR, block=True)
+		except ConnectionAbortedError as e:
+			if e.winerror != 10053:
+				raise e
 			
 	def __rcv_c(self, sock):
 		try:
@@ -51,7 +53,10 @@ class TCPClient:
 				pkt = sock.recv(self.BUFFER_SZ)
 				if not self.__rcv_buff.full() and pkt:
 					self.__rcv_buff.put(pickle.loads(pkt), block=True)
-		except ConnectionResetError as e:
+		except ConnectionAbortedError as e:
+			if e.winerror != 10053:
+				raise e
+		except ConnectionResetError:
 			print(self.__MSG_DISCONNECT, flush=True)
 			self.status.put(self.__ERR, block=True)
 		except OSError as e:

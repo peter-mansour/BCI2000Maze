@@ -14,11 +14,6 @@ class ImageProcessing:
 	__INVERTED_LUMA_THRESHOLD_MIN = 0.7
 	__LUMA_THRESHOLD_MAX = __DEFAULT_LUMA_THRESHOLD_MAX
 	__LUMA_THRESHOLD_MIN = __DEFAULT_LUMA_THRESHOLD_MIN
-	__WIN_MAX_X         = 600
-	__WIN_MAX_Y         = 600
-	__SPRITE_SZ         = 1
-	__FIG_MAX_W         = math.floor(__WIN_MAX_X/__SPRITE_SZ)
-	__FIG_MAX_H         = math.floor(__WIN_MAX_Y/__SPRITE_SZ)
 	DEFAULT_TEMP_DIR  = "../templates/"
 	IMG_EXTS          = ['.png', '.jpg', '.gif']
 	
@@ -81,7 +76,7 @@ class ImageProcessing:
 		return Image.open(BytesIO(base64.b64decode(str)))
 	
 	@staticmethod
-	def load(path):
+	def load(path, maxw, maxh):
 		img = Image.open(path)
-		img = img.resize((ImageProcessing.__FIG_MAX_W, ImageProcessing.__FIG_MAX_H))
+		img = img.resize((maxw, maxh))
 		return np.array(img), img
