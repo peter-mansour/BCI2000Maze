@@ -4,7 +4,20 @@ import threading
 import queue
 import pickle
 import time
+import sys
+import os
 from connect_utils import *
+import logging
+
+if not os.path.isdir('../logs'):
+	os.makedirs('../logs')
+with open('../logs/tcpclient.log', 'w'):
+	pass
+log_tcpc = logging.getLogger(__name__)
+log_tcpc.setLevel(logging.INFO)
+handler_f = logging.FileHandler('../logs/tcpclient.log')
+handler_f.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(funcName)s:%(message)s'))
+log_tcpc.addHandler(handler_f)
 
 class TCPClient:
 	BUFFER_SZ = 10000
@@ -31,19 +44,23 @@ class TCPClient:
 			self.__rcv_t.start()
 			return True
 		except socket.error:
+			log_tcpc.error(self.__MSG_NOT_UP)
 			print(self.__MSG_NOT_UP, flush=True)
 			return False
 	
 	def __send_c(self, sock, trigger):
 		try:
 			while trigger.wait() and not self.__destroy and not self.__send_buff.empty():
-				sock.send(pickle.dumps(self.__send_buff.get(block=True)))
+				pkt = self.__send_buff.get(block=True)
+				log_tcpc.info('sending pkt to %s with request %s'%(self.__IP, pkt.request))
+				sock.send(pickle.dumps(pkt))
 				if self.__send_buff.empty():
 					trigger.clear()
 		except ConnectionResetError:
-			print(self.__MSG_DISCONNECT, flush=True)
+			log_tcpc.error(self.__MSG_DISCONNECT)
 			self.status.put(self.__ERR, block=True)
 		except ConnectionAbortedError as e:
+			log_tcpc.error(str(e))
 			if e.winerror != 10053:
 				raise e
 			
@@ -52,16 +69,21 @@ class TCPClient:
 			while not self.__destroy:
 				pkt = sock.recv(self.BUFFER_SZ)
 				if not self.__rcv_buff.full() and pkt:
-					self.__rcv_buff.put(pickle.loads(pkt), block=True)
+					pkt_content = pickle.loads(pkt)
+					log_tcpc.info('received pkt from %s with request %s'%(self.__IP, pkt_content.request))
+					self.__rcv_buff.put(pkt_content, block=True)
 		except ConnectionAbortedError as e:
+			log_tcpc.error(str(e))
 			if e.winerror != 10053:
 				raise e
 		except ConnectionResetError:
-			print(self.__MSG_DISCONNECT, flush=True)
+			log_tcpc.error(self.__MSG_DISCONNECT)
 			self.status.put(self.__ERR, block=True)
 		except OSError as e:
+			log_tcpc.error(str(e))
 			if e.winerror != 10038:
 				raise e
+		print(self.__MSG_DISCONNECT, file=sys.stderr)
 	
 	def send(self, msg):
 		self.__send_buff.put(msg, block=True)
@@ -79,6 +101,7 @@ class TCPClient:
 			self.__send_buff.queue.clear()
 	
 	def shutdown(self):
+		log_tcpc.info('shutting down connection with server')
 		self.__destroy = 1
 		self.__sock.shutdown(socket.SHUT_RDWR)
 		self.__sock.close()

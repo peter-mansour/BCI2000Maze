@@ -1,4 +1,3 @@
-import turtle
 import time
 import queue
 import math
@@ -18,6 +17,17 @@ import zlib
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 import io
+import logging
+
+if not os.path.isdir('../logs'):
+	os.makedirs('../logs')
+with open('../logs/mazeui.log', 'w'):
+	pass
+log_ui = logging.getLogger(__name__)
+log_ui.setLevel(logging.INFO)
+handler_f = logging.FileHandler('../logs/mazeui.log')
+handler_f.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s'))
+log_ui.addHandler(handler_f)
 
 class OutOfBounds(BaseException):
 	def __init__(self, msg, x, y):
@@ -43,7 +53,7 @@ class GameCtrl:
 	__sckt_tcp = None
 	__start = False
 	
-	def init(sckt_tcp, clr, fpv, keyboard, assist, mvbuff, file, speech, bci, mapl, mapr):
+	def init(sckt_tcp, clr, fpv, keyboard, assist, mvbuff, file, speech, bci, mapl, mapr, listen):
 		GameCtrl.__sckt_tcp = sckt_tcp 
 		GameCtrl.__my_clr = clr
 		if file:
@@ -54,11 +64,12 @@ class GameCtrl:
 		sock.connect(('8.8.8.8', 80))
 		GameCtrl.__my_ip = sock.getsockname()[0]
 		GameCtrl.__key = keyboard
-		GameCtrl.__fpv = fpv
+		GameCtrl.__fpv = True if (fpv or speech) else False
 		GameCtrl.__assist = assist
 		GameCtrl.__mvbuff = mvbuff
 		GameCtrl.__speech = speech
 		GameCtrl.__bci = bci
+		GameCtrl.__listen = listen
 		if mapl:
 			GameCtrl.moves['l'] = mapl
 		if mapr:
@@ -68,15 +79,14 @@ class GameCtrl:
 		try:
 			Console.disable_quick_edit()
 			GameCtrl.__sckt_tcp.send(Pkt('_x_play_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-				{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))	
+				{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
 			GameCtrl.__sckt_tcp.send(Pkt('_x_ready_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
 				{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
-			time.sleep(1)
+			time.sleep(0.05)
 			GameCtrl.__sckt_tcp.send(Pkt('_x_keyboard_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
 				{'ip':'0.0.0.0', 'clr':None}, None, GameCtrl.moves, 0, None, None, None))
 			GameCtrl.update_pos()
 		except KeyboardInterrupt:
-			print('', flush=True)
 			GameCtrl.__sckt_tcp.shutdown()
 		Shell.exit()
 		Console.enable_quick_edit()
@@ -98,13 +108,16 @@ class GameCtrl:
 					GameCtrl.add2players(Player(c.id_trgt['ip'], c.id_trgt['clr'], c.misc.curx, c.misc.cury, c.misc.deg))
 				elif c.request == '_x_start_x_':
 					GameCtrl.__start = True
+				elif c.request == '_x_gameplay_x_' and not GameCtrl.__start:
+					GameCtrl.__sckt_tcp.send(Pkt('_x_ready_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
+						{'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
 				elif c.request == '_x_gameplay_x_' and GameCtrl.__start:
 					P = GameCtrl.get_player(c.id_trgt['ip'], c.id_trgt['clr'])
 					if P:
 						P.crawl(c.misc.curx, c.misc.cury)
 				if c.warn:
 					warning = True
-					print(c.warn, flush=True)
+					log_ui.info(c.warn)
 				else:
 					warning = False
 				Shell.update_ui(GameCtrl._players)
@@ -112,16 +125,24 @@ class GameCtrl:
 			if t_curr - t_last > GameCtrl.__TICK:
 				t_last = dt_dt.now()
 				next_mv = None
-				if (GameCtrl.__speech or GameCtrl.__bci) and not GameCtrl.__mvbuff.empty():
-					try:
+				if GameCtrl.__speech:
+					if not GameCtrl.__listen.is_set() and warning:
+						GameCtrl.__listen.set()
+					if not GameCtrl.__mvbuff.empty():
 						next_mv = GameCtrl.moves[GameCtrl.__mvbuff.get(block=True)]
+					elif not warning:
+						next_mv = 0
+				elif GameCtrl.__bci and not GameCtrl.__mvbuff.empty():
+					try:
+						key = GameCtrl.__mvbuff.get(block=True)
+						next_mv = GameCtrl.moves[key]
 					except KeyError:
-						pass
+						log_ui.warning('received an unidentifiable key move: %s'%key)
 				elif GameCtrl.__key:
 					key = Shell.key_pressed()
 					next_mv = GameCtrl.moves[key] if key else None
 				if GameCtrl.__assist and not warning and next_mv == None:			
-					next_mv = 0
+					next_mv = last_mv
 				if next_mv != None:
 					GameCtrl.__sckt_tcp.send(Pkt('_x_gameplay_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
 						{'ip':'0.0.0.0', 'clr':None}, {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, (next_mv, GameCtrl.__fpv), 0, None, None, None))
@@ -181,6 +202,7 @@ class Shell:
 		Shell.__win.blit(Shell.__bgnd, [0,0])
 	
 	def __draw_player(p):
+		log_ui.info('updating player %s to x=%d y=%d'% (p.ip, p.loc[0], p.loc[1]))
 		pygame.draw.circle(Shell.__win, pygame.Color(p.clr), p.loc, Shell.__PLY_SIZE)
 	
 	def update_ui(players):

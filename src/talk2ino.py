@@ -4,6 +4,17 @@ import threading
 import time
 import os
 import queue
+import logging
+
+if not os.path.isdir('../logs'):
+	os.makedirs('../logs')
+with open('../logs/talk2ino.log', 'w'):
+	pass
+log_ino = logging.getLogger(__name__)
+log_ino.setLevel(logging.INFO)
+handler_f = logging.FileHandler('../logs/talk2ino.log')
+handler_f.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s'))
+log_ino.addHandler(handler_f)
 
 def talk2ino(addr_port, inbuff, outbuff):
 	try:
@@ -17,9 +28,9 @@ def talk2ino(addr_port, inbuff, outbuff):
 				bt_dev.send(outbuff.get(block=True))
 		bt_dev.disconnect()
 	except KeyboardInterrupt:
-		pass
+		log_speech.info("Forcebly closed by user: %s" %str(e))
 	except OSError as e:
-		print(str(e))
+		log_speech.warning(str(e))
 	Console.enable_quick_edit()
 	
 if __name__=="__main__":

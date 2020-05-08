@@ -1,0 +1,6 @@
+click==7.1.2
+numpy==1.18.4
+Pillow==7.1.2
+PyBluez-win10==0.22
+pygame==1.9.6
+scipy==1.4.1

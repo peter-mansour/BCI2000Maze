@@ -27,7 +27,7 @@ class GameLogic:
 	__STEP_SZ = 4
 	__SPRITE_SZ = 1
 	__ERR_FACT = 50
-	_start_pos = (70, 550)
+	_start_pos = (100, 560)
 	_end_pos = (510, 6)
 	__ERR_WALL = "About to hit a wall"
 	__ERR_MAP = "Attempting to add element outside window"
@@ -38,7 +38,7 @@ class GameLogic:
 	__WIN_MAX_Y  = 600
 	__FIG_MAX_W  = math.floor(__WIN_MAX_X/__SPRITE_SZ)
 	__FIG_MAX_H  = math.floor(__WIN_MAX_Y/__SPRITE_SZ)
-	__CAUTIOUS = 5
+	__CAUTIOUS = 1
 	__RISKY = 1
 	
 	@staticmethod
@@ -93,7 +93,7 @@ class GameLogic:
 				win = True
 		else:
 			raise OutOfBounds(GameLogic.__ERR_WALL, pos.curx+round(lr), pos.cury+round(ud))
-		return pos, GameLogic.moves[id][move[0]], win
+		return pos, GameLogic.moves[id][move[0]], win #use default
 	
 	@staticmethod
 	def _bind_keys(id, keyboard):

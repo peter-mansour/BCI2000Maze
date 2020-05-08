@@ -10,12 +10,13 @@ import click
 from win_cmd import Console
 import multiprocessing
 import queue
-#from speech2txt import *
+from speech2txt import *
+	
 
 MSG_CLOSE = 'Closing app...'
 MSG_READY = 'Are you Ready [y/n]: '
 MSG_WAIT = 'waiting...\n'
-MSG_FPV = 'Forward to continue moving in same direction'
+MSG_FPV = 'Turning relative to direction player is looking at'
 MSG_ASSIST = 'When enabled, player only needs to choose left/right at intersections \
  (forward movement is managed by software)'
 
@@ -35,6 +36,8 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
 		file = None
 		keyboard = False
 		bci = False
+		listen = None
+		p = None
 		sock = sckt.socket(sckt.AF_INET, sckt.SOCK_DGRAM)
 		sock.connect(('8.8.8.8', 80))
 		p_ip = sock.getsockname()[0]
@@ -46,18 +49,19 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
 				file.read(bci2000)
 				bci = True
 			elif speech:
-				#inbuff = multiprocessing.Queue()
-				#p = multiprocessing.Process(target=speech2txt, args=(inbuff,), daemon=True)
-				#p.start()
-				pass
+				manager = multiprocessing.Manager()
+				listen = manager.Event()
+				inbuff = multiprocessing.Queue()
+				p = multiprocessing.Process(target=speech2txt, args=(inbuff,listen), daemon=True)
+				p.start()
 			else:
 				keyboard = True
 				inbuff = None
-			GameCtrl.init(tcp_c, color, fpv, keyboard, assist, inbuff, file, speech, bci, mapl, mapr)
+			GameCtrl.init(tcp_c, color, fpv, keyboard, assist, inbuff, file, speech, bci, mapl, mapr, listen)
 			GameCtrl.start()	
 	except KeyboardInterrupt:
 		pass
-	if speech:
+	if p:
 		p.join()
 	print(MSG_CLOSE, flush=True)
 	Console.enable_quick_edit()
