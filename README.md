@@ -1,7 +1,7 @@
 ### Maze Navigation using BCI2000 P3Speller
 #### EE Senior Design
 
-Requires python 3.7 or above
+Requires python 3.7 or above  
 To build project:
 ```
 git clone https://github.com/peter97mansour/BCI2000Maze.git
