@@ -1,20 +1,15 @@
 ### Maze Navigation using BCI2000 P3Speller
 #### EE Senior Design
 
-Requires python 3.x
-
-You need to pip install:
- - click 7.1.1
- - numpy 1.18.2
- - Pillow 7.1.0
- - PyBluez-win10
-
-To run server:
-	`python3 server.py [OPTIONS] IPV4_HOST [PORT]`
-
-To join game:
-	`python3 join_game.py [OPTIONS] IPV4_HOST [PORT] COLOR BCI2000_APP_LOG_PATH`
+Requires python 3.7 or above
+To build project:
+    git clone https://github.com/peter97mansour/BCI2000Maze.git
+    cd BCI2000Maze
+    pip install -r pkg_reqs.txt
+    cd src
+    python3 server.py [OPTIONS] IPV4_HOST [PORT]
+    python3 join_game.py [OPTIONS] IPV4_HOST [PORT] COLOR
 
 To display options and usage, run:
-`python3 join_game.py --help`
-`python3 server.py --help`
+    python3 join_game.py --help
+    python3 server.py --help

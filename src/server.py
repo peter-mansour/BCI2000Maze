@@ -21,27 +21,27 @@ MSG_LUMA_THRES = 'Maze image is inverted. Walls have higher luma (whiter). 0=bla
 @click.argument('port', default=9001, type=int)
 @click.argument('player_count', default=1, type=int)
 def main(ipv4_host, port, player_count, inverted_color, maze, ino, start, end):
-	try:
-		children = []
-		inos = []
-		signal.signal(signal.SIGINT, signal.SIG_DFL)
-		Console.disable_quick_edit()
-		for i in ino:
-			inbuff = multiprocessing.Queue()
-			outbuff = multiprocessing.Queue()
-			p = multiprocessing.Process(target=talk2ino, args=(i, inbuff, outbuff), daemon=True)
-			p.start()
-			children.append(p)
-			inos.append((inbuff, outbuff, True))
-		GameLogic.init(maze, inverted_color, start, end)
-		TCPServer.init(ipv4_host, port, player_count, inos)
-		TCPServer.run_host()
-		TCPServer._wait()
-		while not TCPServer._shutdown:
-			pass
-	except KeyboardInterrupt:
-		print("Closing Server...", flush=True)
-	for p in children:
-		p.join()
+    try:
+        children = []
+        inos = []
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        Console.disable_quick_edit()
+        for i in ino:
+            inbuff = multiprocessing.Queue()
+            outbuff = multiprocessing.Queue()
+            p = multiprocessing.Process(target=talk2ino, args=(i, inbuff, outbuff), daemon=True)
+            p.start()
+            children.append(p)
+            inos.append((inbuff, outbuff, True))
+        GameLogic.init(maze, inverted_color, start, end)
+        TCPServer.init(ipv4_host, port, player_count, inos)
+        TCPServer.run_host()
+        TCPServer._wait()
+        while not TCPServer._shutdown:
+            pass
+    except KeyboardInterrupt:
+        print("Closing Server...", flush=True)
+    for p in children:
+        p.join()
 if __name__ == "__main__":
-	main()
+    main()
