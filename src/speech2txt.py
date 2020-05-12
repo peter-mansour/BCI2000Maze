@@ -44,5 +44,8 @@ def speech2txt(buff, trigger):
             buff.put(pred, block=True)
             log_speech.info('model predicted %s' %pred)
             trigger.clear()
+    except TypeError as e:
+        log_speech.error('Failed to import utils, audio, or nn')
+        log_speech.error(str(e))
     except KeyboardInterrupt as e:
         log_speech.info("Forcebly closed by user: %s" %str(e))

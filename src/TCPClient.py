@@ -8,6 +8,7 @@ import sys
 import os
 from connect_utils import *
 import logging
+import binascii
 
 if not os.path.isdir('../logs'):
     os.makedirs('../logs')
@@ -60,7 +61,8 @@ class TCPClient:
                     if byte_msg:
                         byte_msg+=self.__byte_delim
                     byte_msg+=pickle.dumps(pkt)
-                    log_tcpc.info('sending pkt to %s with request %s'%(self.__IP, pkt.request))
+                    log_tcpc.info('sending pkt to %s with request %s and transaction id %s'%
+                        (self.__IP, pkt.request, str(binascii.hexlify(pkt.txn))))
                     msg_sz+=1
                 sock.send(byte_msg)
                 trigger.clear()
@@ -80,7 +82,8 @@ class TCPClient:
                     pkts = pkt.split(self.__byte_delim)
                     for p in pkts:
                         pkt_content = pickle.loads(p)
-                        log_tcpc.info('received pkt from %s with request %s'%(self.__IP, pkt_content.request))
+                        log_tcpc.info('received pkt from %s with request %s and transaction id %s'%
+                            (self.__IP, pkt_content.request, str(binascii.hexlify(pkt_content.txn))))
                         self.__rcv_buff.put(pkt_content, block=True)
         except ConnectionAbortedError as e:
             log_tcpc.error(str(e))

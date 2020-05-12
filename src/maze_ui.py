@@ -79,13 +79,12 @@ class GameCtrl:
         try:
             Console.disable_quick_edit()
             GameCtrl.__sckt_tcp.send(Pkt('_x_play_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-                {'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
+                {'ip':'0.0.0.0', 'clr':None}, None, None, os.urandom(8), None))
             GameCtrl.__sckt_tcp.send(Pkt('_x_ready_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-                {'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
+                {'ip':'0.0.0.0', 'clr':None}, None, None, os.urandom(8), None))
             GameCtrl.__sckt_tcp.send(Pkt('_x_keyboard_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-                {'ip':'0.0.0.0', 'clr':None}, None, GameCtrl.moves, 0, None, None, None))
+                {'ip':'0.0.0.0', 'clr':None}, None, GameCtrl.moves, os.urandom(8), None))
             GameCtrl.update_pos()
-            time.sleep(3)
         except KeyboardInterrupt:
             GameCtrl.__sckt_tcp.shutdown()
         Shell.exit()
@@ -97,25 +96,28 @@ class GameCtrl:
         warning = False
         t_curr = dt_dt.now()
         t_last = dt_dt.now()
-        while not Shell.is_quit() and GameCtrl.__is_alive(*GameCtrl.__dependencies):
+        while not Shell.is_quit():
+            if not GameCtrl.__is_alive(*GameCtrl.__dependencies):
+                time.sleep(1)
+                break;
             c = GameCtrl.__sckt_tcp.get()
             if c:
                 if c.request == '_x_img_x_':    
                     Shell.set_bgnd(ImageProcessing.base642img(zlib.decompress(c.data)))
                 elif c.request == '_x_new_player_x_' and Shell.is_bgnd():
-                    P = Player(c.id_trgt['ip'], c.id_trgt['clr'], c.misc.curx, c.misc.cury, c.misc.deg)
+                    P = Player(c.id_trgt['ip'], c.id_trgt['clr'], c.data.curx, c.data.cury, c.data.deg)
                     GameCtrl.add2players(P)
-                    P.crawl(c.misc.curx, c.misc.cury)
+                    P.crawl(c.data.curx, c.data.cury)
                 elif c.request == '_x_start_x_':
                     GameCtrl.__start = True
                 elif c.request == '_x_gameplay_x_' and not GameCtrl.__start:
                     GameCtrl.__sckt_tcp.send(Pkt('_x_ready_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-                        {'ip':'0.0.0.0', 'clr':None}, None, None, 0, None, None, None))
+                        {'ip':'0.0.0.0', 'clr':None}, None, None, os.urandom(8), None))
                 elif c.request == '_x_gameplay_x_' and GameCtrl.__start and Shell.is_bgnd():
                     P = GameCtrl.get_player(c.id_trgt['ip'], c.id_trgt['clr'])
                     if P:
-                        P.crawl(c.misc.curx, c.misc.cury)
-                if c.warn:
+                        P.crawl(c.data.curx, c.data.cury)
+                if c.warn and c.id_trgt['ip'] == GameCtrl.__my_ip and c.id_trgt['clr'] == GameCtrl.__my_clr:
                     warning = True
                     log_ui.info(c.warn)
                 else:
@@ -145,7 +147,8 @@ class GameCtrl:
                     next_mv = last_mv
                 if next_mv != None:
                     GameCtrl.__sckt_tcp.send(Pkt('_x_gameplay_x_', {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
-                        {'ip':'0.0.0.0', 'clr':None}, {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, (next_mv, GameCtrl.__fpv), 0, None, None, None))
+                        {'ip':'0.0.0.0', 'clr':None}, {'ip':GameCtrl.__my_ip, 'clr':GameCtrl.__my_clr}, 
+                        (next_mv, GameCtrl.__fpv, GameCtrl.__speech), os.urandom(8), None))
                 last_mv = next_mv
                 
     def add2players(new_p):

@@ -134,9 +134,12 @@ class TCPServer:
                 else:
                     TCPServer.remove(client)
                     break
-            client.sock.close()
         except (ConnectionResetError, EOFError):
-            TCPServer.remove(client)
+            pass
+        except Exception as e:
+            log_tcpserv.info(str(e))
+        client.sock.close()
+        TCPServer.remove(client)
         TCPServer.__destroy_threads.put(thid, block=True)
         TCPServer.__cleanup.set()
     
@@ -154,74 +157,78 @@ class TCPServer:
         while TCPServer.__trig_process.wait():
             if not TCPServer.__pkt_buffer.empty():
                 pkt_info = TCPServer.__pkt_buffer.get(block=True)
-                if pkt_info[1] == 'json' and pkt_info[0]['request'] == '_x_watch_x_':
-                    pkt_info[2].role = 'Listener'
-                    TCPServer.__listeners.append(pkt_info[2])
-                    log_tcpserv.info(TCPServer.__MSG_REQ % (pkt_info[2].ip, 'Listener'))
-                elif pkt_info[1] == 'pickle':
-                    client = TCPServer.get_client(pkt_info[0].id_from['ip'], TCPServer.__clients)
-                    if pkt_info[0].request == '_x_play_x_':
-                        client.role = 'Player'
-                        client.clr = pkt_info[0].id_from['clr']
-                        client.misc = pos(GameLogic._start_pos[0]+st_offset, GameLogic._start_pos[1], 0, 0, 90, None)
-                        st_offset+=4
-                        for ino in TCPServer.__inos:
-                            client.ino = (ino[0], ino[1]) if ino[2] else None
-                        TCPServer.__players.append(client)
-                        TCPServer.dm(client, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, 
-                            {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
-                            zlib.compress(ImageProcessing.img2base64(GameLogic._maze_img_obj)), 
-                            None, os.urandom(8), None, None))
-                        rsp = Pkt('_x_new_player_x_', {'ip':client.ip, 'clr':client.clr}, {'ip':'0.0.0.0', 'clr':None}, 
-                            {'ip':client.ip, 'clr':client.clr}, None, None, os.urandom(8), client.misc, None)
-                        TCPServer.__broadcast_buff.put((rsp, 'pickle'), block=True)
-                        TCPServer.__broadcast_item.set()
-                        for p in TCPServer.__players:
-                            if p.ip != client.ip:
-                                TCPServer.dm(client, Pkt('_x_new_player_x_', {'ip':'0.0.0.0', 'clr':None}, 
-                                    {'ip':'0.0.0.0', 'clr':None}, {'ip':p.ip, 'clr':p.clr}, 
-                                    None, None, os.urandom(8), p.misc, None))
-                        log_tcpserv.info(TCPServer.__MSG_REQ % (client.ip, 'Player'))
-                    elif pkt_info[0].request == '_x_gameplay_x_' and client.role == 'Player' and TCPServer.__game_on:
-                        new_pos = client.misc
-                        warn = None
-                        try:
-                            new_pos, dir, win = GameLogic.update_pos(client.ip, client.misc, pkt_info[0].data)
-                        except OutOfBounds as e:
-                            win = None
-                            dir = None
-                            warn = "%s (%d, %d)" % (e.msg, e.x, e.y)
-                        rsp_pick = Pkt('_x_gameplay_x_', {'ip':client.ip, 'clr':client.clr}, {'ip':'0.0.0.0', 'clr':None}, 
-                            {'ip':client.ip, 'clr':client.clr}, None, None, os.urandom(8), new_pos, warn)
-                        rsp_json = PktCompact('_x_gameplay_x_', client.ip, client.clr, dir, new_pos.deg)
-                        TCPServer.__broadcast_buff.put((rsp_json, 'json'), block=True)
-                        TCPServer.__broadcast_buff.put((rsp_pick, 'pickle'), block=True)
-                        TCPServer.__broadcast_item.set()
-                        if dir and client.ino:
-                            client.ino[1].put(dir, block=True)
-                        if win:
-                            TCPServer.dm(client, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
-                            {'ip':client.ip, 'clr':client.clr}, zlib.compress(ImageProcessing.img2base64(GameLogic._win_img)), 
-                            None, os.urandom(8), None, None))
-                            for c in TCPServer.__players:
-                                if c.ip != client.ip:
-                                    TCPServer.dm(c, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, 
-                                        {'ip':'0.0.0.0', 'clr':None}, {'ip':client.ip, 'clr':client.clr}, 
-                                        zlib.compress(ImageProcessing.img2base64(GameLogic._lose_img)), 
-                                        None, os.urandom(8), None, None))
-                            TCPServer._shutdown = True
-                            TCPServer.__game_on = False
-                            break
-                    elif pkt_info[0].request == '_x_keyboard_x_' and client.role == 'Player':
-                        GameLogic._bind_keys(client.ip, pkt_info[0].data)
-                    elif pkt_info[0].request == '_x_ready_x_' and client.role == 'Player':
-                        if TCPServer.__game_on:
-                            rsp = Pkt('_x_start_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None},
-                                None, None, None, os.urandom(8), None, None)
-                            TCPServer.dm(client, rsp)
-                        else:
-                            TCPServer.__ready_pkgs.put(pkt_info[0])
-                            TCPServer.__trig_ready.set()
+                try:
+                    if pkt_info[1] == 'json' and pkt_info[0]['request'] == '_x_watch_x_':
+                        pkt_info[2].role = 'Listener'
+                        TCPServer.__listeners.append(pkt_info[2])
+                        log_tcpserv.info(TCPServer.__MSG_REQ % (pkt_info[2].ip, 'Listener'))
+                    elif pkt_info[1] == 'pickle':
+                        client = TCPServer.get_client(pkt_info[0].id_from['ip'], TCPServer.__clients)
+                        if pkt_info[0].request == '_x_play_x_':
+                            client.role = 'Player'
+                            client.clr = pkt_info[0].id_from['clr']
+                            client.misc = pos(GameLogic._start_pos[0]+st_offset, GameLogic._start_pos[1], 0, 0, 90, None)
+                            st_offset+=4
+                            for ino in TCPServer.__inos:
+                                client.ino = (ino[0], ino[1]) if ino[2] else None
+                            TCPServer.__players.append(client)
+                            TCPServer.dm(client, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, 
+                                {'ip':client.ip, 'clr':client.clr}, {'ip':client.ip, 'clr':client.clr}, 
+                                zlib.compress(ImageProcessing.img2base64(GameLogic._maze_img_obj)), 
+                                os.urandom(8), None))
+                            rsp = Pkt('_x_new_player_x_', {'ip':client.ip, 'clr':client.clr}, {'ip':'0.0.0.0', 'clr':None}, 
+                                {'ip':client.ip, 'clr':client.clr}, client.misc, os.urandom(8), None)
+                            TCPServer.__broadcast_buff.put((rsp, 'pickle'), block=True)
+                            TCPServer.__broadcast_item.set()
+                            for p in TCPServer.__players:
+                                if p.ip != client.ip:
+                                    TCPServer.dm(client, Pkt('_x_new_player_x_', {'ip':'0.0.0.0', 'clr':None}, 
+                                        {'ip':client.ip, 'clr':client.clr}, {'ip':p.ip, 'clr':p.clr}, 
+                                        p.misc, os.urandom(8), None))
+                            log_tcpserv.info(TCPServer.__MSG_REQ % (client.ip, 'Player'))
+                        elif pkt_info[0].request == '_x_gameplay_x_' and client.role == 'Player' and TCPServer.__game_on:
+                            new_pos = client.misc
+                            warn = None
+                            try:
+                                new_pos, dir, win = GameLogic.update_pos(client.ip, client.misc, pkt_info[0].data)
+                            except OutOfBounds as e:
+                                win = None
+                                dir = None
+                                warn = "%s (%d, %d)" % (e.msg, e.x, e.y)
+                            rsp_pick = Pkt('_x_gameplay_x_', {'ip':client.ip, 'clr':client.clr}, {'ip':'0.0.0.0', 'clr':None}, 
+                                {'ip':client.ip, 'clr':client.clr}, new_pos, os.urandom(8), warn)
+                            rsp_json = PktCompact('_x_gameplay_x_', client.ip, client.clr, dir, new_pos.deg)
+                            TCPServer.__broadcast_buff.put((rsp_json, 'json'), block=True)
+                            TCPServer.__broadcast_buff.put((rsp_pick, 'pickle'), block=True)
+                            TCPServer.__broadcast_item.set()
+                            if dir and client.ino:
+                                client.ino[1].put(dir, block=True)
+                            if win:
+                                TCPServer.dm(client, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None}, 
+                                {'ip':client.ip, 'clr':client.clr}, zlib.compress(ImageProcessing.img2base64(GameLogic._win_img)), 
+                                os.urandom(8), None))
+                                for c in TCPServer.__players:
+                                    if c.ip != client.ip:
+                                        TCPServer.dm(c, Pkt('_x_img_x_', {'ip':'0.0.0.0', 'clr':None}, 
+                                            {'ip':'0.0.0.0', 'clr':None}, {'ip':client.ip, 'clr':client.clr}, 
+                                            zlib.compress(ImageProcessing.img2base64(GameLogic._lose_img)), 
+                                            os.urandom(8), None))
+                                TCPServer._shutdown = True
+                                TCPServer.__game_on = False
+                                break
+                        elif pkt_info[0].request == '_x_keyboard_x_' and client.role == 'Player':
+                            GameLogic._bind_keys(client.ip, pkt_info[0].data)
+                        elif pkt_info[0].request == '_x_ready_x_' and client.role == 'Player':
+                            if TCPServer.__game_on:
+                                rsp = Pkt('_x_start_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':client.ip, 'clr':client.clr},
+                                    None, None, os.urandom(8), None)
+                                TCPServer.dm(client, rsp)
+                            else:
+                                TCPServer.__ready_pkgs.put(pkt_info[0])
+                                TCPServer.__trig_ready.set()
+                except TypeError as t:
+                    log_tcpserv.error('Failed to read message')
+                    log_tcpserv.error(str(t))
             if TCPServer.__pkt_buffer.empty():
                 TCPServer.__trig_process.clear()
 
@@ -246,7 +253,7 @@ class TCPServer:
                     if index == -1:
                         ips.append(pkt.id_from['ip'])
         rsp = Pkt('_x_start_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':'0.0.0.0', 'clr':None},
-            None, None, None, os.urandom(8), None, None)
+            None, None, os.urandom(8), None)
         TCPServer.__broadcast_buff.put((rsp, 'pickle'), block=True)
         TCPServer.__broadcast_item.set()
         TCPServer.__game_on = True

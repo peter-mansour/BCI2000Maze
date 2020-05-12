@@ -1,6 +1,18 @@
 import math
 from ImageProcessing import *
 import numpy as np
+import os
+import logging
+
+if not os.path.isdir('../logs'):
+    os.makedirs('../logs')
+with open('../logs/gamelogic.log', 'w'):
+    pass
+log_game = logging.getLogger(__name__)
+log_game.setLevel(logging.INFO)
+handler_f = logging.FileHandler('../logs/gamelogic.log')
+handler_f.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(funcName)s:%(message)s'))
+log_game.addHandler(handler_f)
 
 class OutOfBounds(BaseException):
     def __init__(self, msg, x, y):
@@ -38,7 +50,7 @@ class GameLogic:
     __WIN_MAX_Y  = 600
     __FIG_MAX_W  = math.floor(__WIN_MAX_X/__SPRITE_SZ)
     __FIG_MAX_H  = math.floor(__WIN_MAX_Y/__SPRITE_SZ)
-    __CAUTIOUS = 1
+    __CAUTIOUS = 3
     __RISKY = 1
     
     @staticmethod
@@ -58,41 +70,46 @@ class GameLogic:
     
     @staticmethod
     def deg2xy(deg):
-        lr = GameLogic.__STEP_SZ*math.cos(math.radians(deg))
-        ud = -1*GameLogic.__STEP_SZ*math.sin(math.radians(deg))
+        lr = math.cos(math.radians(deg))
+        ud = -1*math.sin(math.radians(deg))
         return lr, ud
     
     @staticmethod
-    def near_wall(pre, post, err_fact):
+    def near_wall(pre, delta, err_fact):
         try:
-            if post[0] < 0 or post[1] < 0:
-                return OutOfBounds(GameLogic.__ERR_MAP, post[1], post[0])
-            for r in range(min(pre[0], post[0])-err_fact, max(pre[0], post[0])+err_fact):
-                for c in range(min(pre[1], post[1])-err_fact, max(pre[1], post[1])+err_fact):
-                    if GameLogic.__walls[r, c]:
-                        return True
+            i = 0
+            while(i <= err_fact*GameLogic.__STEP_SZ):
+                y_new = round(i*delta[1])+pre[1]
+                x_new = round(i*delta[0])+pre[0]
+                if y_new < 0 or x_new < 0:
+                    raise IndexError(GameLogic.__ERR_MAP, x_new, y_new)
+                if GameLogic.__walls[y_new, x_new]:
+                    return True
+                i+=1
             return False
-        except IndexError:
-            raise OutOfBounds(GameLogic.__ERR_MAP, c, r)
+        except IndexError as e:
+            log_game.info(str(e))
+            raise OutOfBounds(GameLogic.__ERR_MAP, x_new, y_new)
     
     @staticmethod
     def update_pos(id, pos, move):
         win = False
         new_deg = (move[0]+pos.deg)%360 if move[1] else 90+move[0]
-        lr, ud = GameLogic.deg2xy(new_deg)
+        dx, dy = GameLogic.deg2xy(new_deg)
         dir = None
-        err_fact = GameLogic.__CAUTIOUS if not move[0] else GameLogic.__RISKY
-        if not GameLogic.near_wall((pos.cury, pos.curx), (pos.cury+round(ud), pos.curx+round(lr)), err_fact):
+        err_fact = GameLogic.__CAUTIOUS if move[2] else GameLogic.__RISKY
+        if not GameLogic.near_wall((pos.curx, pos.cury), (dx, dy), err_fact):
             pos.deg = new_deg
             pos.prevx = pos.curx
             pos.prevy = pos.cury
-            pos.cury += round(ud)
-            pos.curx += round(lr)
+            pos.cury += round(GameLogic.__STEP_SZ*dy)
+            pos.curx += round(GameLogic.__STEP_SZ*dx)
             if pos.cury <= GameLogic._end_pos[1] and pos.curx >= GameLogic._end_pos[0]-GameLogic.__ERR_FACT \
-                and  pos.curx <= GameLogic._end_pos[0]+GameLogic.__ERR_FACT:
+                and pos.curx <= GameLogic._end_pos[0]+GameLogic.__ERR_FACT:
                 win = True
         else:
-            raise OutOfBounds(GameLogic.__ERR_WALL, pos.curx+round(lr), pos.cury+round(ud))
+            raise OutOfBounds(GameLogic.__ERR_WALL, pos.curx+round(GameLogic.__STEP_SZ*dx), 
+                pos.cury+round(GameLogic.__STEP_SZ*dy))
         return pos, GameLogic.moves[id][move[0]], win
     
     @staticmethod

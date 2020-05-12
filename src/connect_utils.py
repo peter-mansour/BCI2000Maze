@@ -14,15 +14,13 @@ class ClientInfo:
 
 class Pkt:
     def __init__(self, subject, id_from={'ip':'0.0.0.0', 'clr':None}, id_to={'ip':'0.0.0.0', 'clr':None}, 
-        trgt={'ip':'0.0.0.0', 'clr':None}, data=None, sz=0, txn=None, misc=None, warn=None):
+        trgt={'ip':'0.0.0.0', 'clr':None}, data=None, txn=None, warn=None):
         self.request = subject
         self.data = data
         self.id_from = id_from
         self.id_to = id_to
         self.id_trgt = trgt
-        self.sz = sz
         self.txn = txn
-        self.misc = misc
         self.warn = warn
 
 class PktCompact:
