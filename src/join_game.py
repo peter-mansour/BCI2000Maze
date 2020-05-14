@@ -8,7 +8,6 @@ import sys
 import time
 import click
 from win_cmd import Console
-import multiprocessing
 import queue
 from speech2txt import *
     
@@ -49,11 +48,10 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
                 file.read(bci2000)
                 bci = True
             elif speech:
-                manager = multiprocessing.Manager()
-                listen = manager.Event()
-                inbuff = multiprocessing.Queue()
-                p = multiprocessing.Process(target=speech2txt, args=(inbuff,listen), daemon=True)
-                p.start()
+                listen = threading.Event()
+                inbuff = queue.Queue()
+                t = threading.Thread(target=speech2txt, args=(inbuff,listen), daemon=True)
+                t.start()
             else:
                 keyboard = True
                 inbuff = None
@@ -61,8 +59,8 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
             GameCtrl.start()    
     except KeyboardInterrupt:
         pass
-    if p:
-        p.join()
+    if t:
+        t.join()
     print(MSG_CLOSE, flush=True)
     Console.enable_quick_edit()
 

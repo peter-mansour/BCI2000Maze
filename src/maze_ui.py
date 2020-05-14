@@ -48,7 +48,7 @@ class GameCtrl:
     __ERR_FLAG = -9999
     __dependencies = []
     travel_t = 0.05
-    moves = {'f':0, 'b':180, 'l':90, 'r':-90, 'ul':45, 'ur':-45, 'dl':225, 'dr':-135, 'l63':63, 'r63':-63}
+    moves = {'f':0, 'b':180, 'l':90, 'r':-90, 'ul':45, 'ur':-45, 'dl':-135, 'dr':225, 'l63':63, 'r63':-63}
     P = None
     __sckt_tcp = None
     __start = False
@@ -152,13 +152,14 @@ class GameCtrl:
                 last_mv = next_mv
                 
     def add2players(new_p):
-        GameCtrl._players.append(new_p)
+        if not GameCtrl.ip_exists(new_p.ip):
+            GameCtrl._players.append(new_p)
 
-    def is_unique_clr(clr):
+    def ip_exists(ip):
         for p in GameCtrl._players:
-            if p.clr == clr:
-                return False
-        return True
+            if p.ip == ip:
+                return True
+        return False
 
     def get_player(ip, clr):
         for p in GameCtrl._players:

@@ -53,6 +53,7 @@ class TCPServer:
     __sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     __MAX_MSGS = 50
     __byte_delim = b'?_?'
+    st_offset = 0
     
     @staticmethod
     def init(IP, PORT, count, inos):
@@ -153,7 +154,6 @@ class TCPServer:
     
     @staticmethod
     def __process_pkt():
-        st_offset = 0
         while TCPServer.__trig_process.wait():
             if not TCPServer.__pkt_buffer.empty():
                 pkt_info = TCPServer.__pkt_buffer.get(block=True)
@@ -167,8 +167,8 @@ class TCPServer:
                         if pkt_info[0].request == '_x_play_x_':
                             client.role = 'Player'
                             client.clr = pkt_info[0].id_from['clr']
-                            client.misc = pos(GameLogic._start_pos[0]+st_offset, GameLogic._start_pos[1], 0, 0, 90, None)
-                            st_offset+=4
+                            client.misc = pos(GameLogic._start_pos[0]+TCPServer.st_offset, GameLogic._start_pos[1], 0, 0, 90, None)
+                            TCPServer.st_offset+=4
                             for ino in TCPServer.__inos:
                                 client.ino = (ino[0], ino[1]) if ino[2] else None
                             TCPServer.__players.append(client)
@@ -176,16 +176,12 @@ class TCPServer:
                                 {'ip':client.ip, 'clr':client.clr}, {'ip':client.ip, 'clr':client.clr}, 
                                 zlib.compress(ImageProcessing.img2base64(GameLogic._maze_img_obj)), 
                                 os.urandom(8), None))
-                            rsp = Pkt('_x_new_player_x_', {'ip':client.ip, 'clr':client.clr}, {'ip':'0.0.0.0', 'clr':None}, 
-                                {'ip':client.ip, 'clr':client.clr}, client.misc, os.urandom(8), None)
-                            TCPServer.__broadcast_buff.put((rsp, 'pickle'), block=True)
-                            TCPServer.__broadcast_item.set()
                             for p in TCPServer.__players:
-                                if p.ip != client.ip:
-                                    TCPServer.dm(client, Pkt('_x_new_player_x_', {'ip':'0.0.0.0', 'clr':None}, 
-                                        {'ip':client.ip, 'clr':client.clr}, {'ip':p.ip, 'clr':p.clr}, 
-                                        p.misc, os.urandom(8), None))
-                            log_tcpserv.info(TCPServer.__MSG_REQ % (client.ip, 'Player'))
+                                rsp = Pkt('_x_new_player_x_', {'ip':'0.0.0.0', 'clr':None}, {'ip':client.ip, 'clr':client.clr}, 
+                                    {'ip':p.ip, 'clr':p.clr}, p.misc, os.urandom(8), None)
+                                TCPServer.__broadcast_buff.put((rsp, 'pickle'), block=True)
+                                log_tcpserv.info(TCPServer.__MSG_REQ % (client.ip, 'Player'))
+                            TCPServer.__broadcast_item.set()
                         elif pkt_info[0].request == '_x_gameplay_x_' and client.role == 'Player' and TCPServer.__game_on:
                             new_pos = client.misc
                             warn = None
@@ -327,3 +323,4 @@ class TCPServer:
                     TCPServer.__listeners.remove(c)
                 if c in TCPServer.__players:
                     TCPServer.__players.remove(c)
+                    TCPServer.st_offset-=4

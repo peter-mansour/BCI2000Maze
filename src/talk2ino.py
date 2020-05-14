@@ -26,11 +26,11 @@ def talk2ino(addr_port, inbuff, outbuff):
         while status.empty() or status.get(block=True):
             if not outbuff.empty():
                 bt_dev.send(outbuff.get(block=True))
-        bt_dev.disconnect()
     except KeyboardInterrupt:
         log_ino.info("Forcebly closed by user: %s" %str(e))
     except OSError as e:
         log_ino.warning(str(e))
+    bt_dev.disconnect()
     Console.enable_quick_edit()
     
 if __name__=="__main__":
