@@ -36,7 +36,7 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
         keyboard = False
         bci = False
         listen = None
-        p = None
+        listen_th = None
         sock = sckt.socket(sckt.AF_INET, sckt.SOCK_DGRAM)
         sock.connect(('8.8.8.8', 80))
         p_ip = sock.getsockname()[0]
@@ -50,8 +50,8 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
             elif speech:
                 listen = threading.Event()
                 inbuff = queue.Queue()
-                t = threading.Thread(target=speech2txt, args=(inbuff,listen), daemon=True)
-                t.start()
+                listen_th = threading.Thread(target=speech2txt, args=(inbuff,listen), daemon=True)
+                listen_th.start()
             else:
                 keyboard = True
                 inbuff = None
@@ -59,8 +59,8 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
             GameCtrl.start()    
     except KeyboardInterrupt:
         pass
-    if t:
-        t.join()
+    if listen_th:
+        listen_th.join()
     print(MSG_CLOSE, flush=True)
     Console.enable_quick_edit()
 
