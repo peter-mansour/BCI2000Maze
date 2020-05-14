@@ -153,7 +153,7 @@ class TCPServer:
     
     @staticmethod
     def __process_pkt():
-        st_offset = 0
+        #st_offset = 0
         while TCPServer.__trig_process.wait():
             if not TCPServer.__pkt_buffer.empty():
                 pkt_info = TCPServer.__pkt_buffer.get(block=True)
@@ -167,8 +167,8 @@ class TCPServer:
                         if pkt_info[0].request == '_x_play_x_':
                             client.role = 'Player'
                             client.clr = pkt_info[0].id_from['clr']
-                            client.misc = pos(GameLogic._start_pos[0]+st_offset, GameLogic._start_pos[1], 0, 0, 90, None)
-                            st_offset+=4
+                            client.misc = pos(GameLogic._start_pos[0], GameLogic._start_pos[1], 0, 0, 90, None)
+                            #st_offset+=4
                             for ino in TCPServer.__inos:
                                 client.ino = (ino[0], ino[1]) if ino[2] else None
                             TCPServer.__players.append(client)
