@@ -12,14 +12,18 @@ public class Game : MonoBehaviour
     private string IPAddress = "192.168.1.8";
     private int PORT = 9001;
     private string msg = "{ \"request\": \"_x_watch_x_\", \"plyr_ip\": \"\", \"plyr_clr\": \"\", \"direction\": \"\", \"degree\": 0}";
+    private List<string> msgs;
+
     void Start(){
         Client.Init(IPAddress, PORT);
         Client.Send(msg);
     }
 
     void Update(){
-        if (Client.outbuff.TryDequeue(out string msg)){
-            Debug.Log(msg);
+        msgs = Client.get_msgs();
+        foreach (string m in msgs){
+            Pkt pkt_content = JsonUtility.FromJson<Pkt>(m);
+            Debug.Log(pkt_content.direction);
         }
         //do stuff
     }
@@ -33,7 +37,7 @@ public class Client
     private static byte[] inbuff;
     private static NetworkStream pipe;
     private static string delim = "?_?";
-    public static ConcurrentQueue<string> outbuff = new ConcurrentQueue<string>();
+    public static Queue<string> outbuff = new Queue<string>();
 
     public static void Init(string ip, int port){
         sckt = new TcpClient(ip, port);
@@ -61,7 +65,9 @@ public class Client
                         string[] msgs = Encoding.Default.GetString(inbuff).Split(
                             new string[] { delim }, System.StringSplitOptions.None);
                         for (uint i = 0; i < msgs.Length; i++){
-                            outbuff.Enqueue(msgs[i]);
+                            lock (outbuff){
+                                outbuff.Enqueue(msgs[i]);
+                            }
                         }
                     }
                 }
@@ -70,6 +76,17 @@ public class Client
         catch (SocketException e){
             Debug.Log(e);
         }
+    }
+
+    // wrap buffer locking
+    public static List<string> get_msgs() {
+        List<string> msgs = new List<string>();
+        while (outbuff.Count != 0) {
+            lock (outbuff){
+                msgs.Add(outbuff.Dequeue());
+            }
+        }
+        return msgs;
     }
 
     public static void Send(string msg){
@@ -85,4 +102,13 @@ public class Client
             }
         }
     }
+}
+
+class Pkt
+{
+    public string request = string.Empty;
+    public string plyr_ip = string.Empty;
+    public string plyr_clr = string.Empty;
+    public string direction = string.Empty;
+    public int degree = -1;
 }
