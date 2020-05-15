@@ -56,11 +56,11 @@ def main(assist, ipv4_host, port, color, fpv, bci2000, speech, mapl, mapr):
                 keyboard = True
                 inbuff = None
             GameCtrl.init(tcp_c, color, fpv, keyboard, assist, inbuff, file, speech, bci, mapl, mapr, listen)
-            GameCtrl.start()    
+            GameCtrl.start()  
     except KeyboardInterrupt:
         pass
     if listen_th:
-        listen_th.join()
+        listen_th.join(1)
     print(MSG_CLOSE, flush=True)
     Console.enable_quick_edit()
 

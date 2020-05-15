@@ -97,7 +97,7 @@ class TCPServer:
                 else:
                     log_tcpserv.warning(TCPServer.__MSG_REJECT_JOIN % client.ip)
         except KeyboardInterrupt as e:
-            TCPServer.__manager_t.join()
+            TCPServer.__manager_t.join(1)
             raise e
     
     @staticmethod
@@ -148,7 +148,7 @@ class TCPServer:
     def __manage_threads():
         while TCPServer.__cleanup.wait():
             thid = TCPServer.__destroy_threads.get(block=True)
-            TCPServer.__threads[thid].join()
+            TCPServer.__threads[thid].join(1)
             if TCPServer.__destroy_threads.empty():
                 TCPServer.__cleanup.clear()
     
@@ -234,7 +234,7 @@ class TCPServer:
         ready_t = threading.Thread(target=TCPServer.__ready_up, args=(kill,), daemon=True)
         ready_t.start()
         if kill.wait():
-            ready_t.join()
+            ready_t.join(1)
     
     def __ready_up(kill):
         ips = []

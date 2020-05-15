@@ -14,14 +14,14 @@ handler_f = logging.FileHandler('../logs/speech2txt.log')
 handler_f.setFormatter(logging.Formatter('%(asctime)s:%(levelname)s:%(name)s:%(message)s'))
 log_speech.addHandler(handler_f)
 
-try:
-    import utils
-    from audio import record_audio
-    from nn import model, predict
-except ImportError as e:
-    log_speech.warning("might be missing speech recognition modules required for --speech only")
-    log_speech.warning("clone from https://github.com/SASVDERDBGTYS/SpeechRecog.git")
-    log_speech.error(str(e))
+#try:
+import utils
+from audio import record_audio
+from nn import model, predict
+#except ImportError as e:
+#    log_speech.warning("might be missing speech recognition modules required for --speech only")
+#    log_speech.warning("clone from https://github.com/SASVDERDBGTYS/SpeechRecog.git")
+#    log_speech.error(str(e))
 
 def speech2txt(buff, trigger):
     resource_path = Path(os.getcwd()) / 'resources'
